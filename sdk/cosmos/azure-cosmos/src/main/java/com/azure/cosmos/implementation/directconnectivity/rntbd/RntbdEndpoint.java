@@ -194,6 +194,11 @@ public interface RntbdEndpoint extends AutoCloseable {
         }
 
         @JsonProperty
+        public int minChannelsPerEndpoint() {
+            return this.options.minChannelsPerEndpoint();
+        }
+
+        @JsonProperty
         public int maxRequestsPerChannel() {
             return this.options.maxRequestsPerChannel();
         }

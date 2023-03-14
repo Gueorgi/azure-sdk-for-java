@@ -102,6 +102,7 @@ public class AsyncClientFactory {
             .setIdleEndpointTimeout(Duration.ofHours(1L)) // Default
             .setIdleConnectionTimeout(Duration.ofMinutes(5)) // Custom
             .setMaxConnectionsPerEndpoint(130) // Default
+            .setMinConnectionsPerEndpoint(0) // Default
             .setMaxRequestsPerConnection(30); // Default
     }
 

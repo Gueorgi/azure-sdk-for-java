@@ -169,6 +169,7 @@ public final class RntbdClientChannelPool implements ChannelPool {
     private final ChannelHealthChecker healthChecker;
     // private final ScheduledFuture<?> idleStateDetectionScheduledFuture;
     private final int maxChannels;
+    private final int minChannels;
     private final int maxPendingAcquisitions;
     private final int maxRequestsPerChannel;
     private final ChannelPoolHandler poolHandler;
@@ -259,6 +260,7 @@ public final class RntbdClientChannelPool implements ChannelPool {
         this.connectTimeoutInMillis = config.connectTimeoutInMillis();
         this.allocatorMetric = config.allocator().metric();
         this.maxChannels = config.maxChannelsPerEndpoint();
+        this.minChannels = config.minChannelsPerEndpoint();
         this.maxRequestsPerChannel = config.maxRequestsPerChannel();
 
         this.maxPendingAcquisitions = Integer.MAX_VALUE;
@@ -373,6 +375,17 @@ public final class RntbdClientChannelPool implements ChannelPool {
      */
     public int maxChannels() {
         return this.maxChannels;
+    }
+
+    /**
+     * Gets the minimum number of channels that will be allocated to this {@link RntbdClientChannelPool pool}.
+     * <p>
+     * No less than {@code minChannels} channels will be pooled.
+     *
+     * @return the minimum number of channels that will be allocated to this {@link RntbdClientChannelPool pool}.
+     */
+    public int minChannels() {
+        return this.minChannels;
     }
 
     /**
@@ -684,7 +697,12 @@ public final class RntbdClientChannelPool implements ChannelPool {
             // ONLY allow maximum 1 channel to be opened by open channel request
             int allowedMaxChannels = this.maxChannels;
             if (promise instanceof OpenChannelPromise) {
-                allowedMaxChannels = 1;
+                // if there is to be min connections in the pool, allow opening all of these.
+                if (minChannels > 1) {
+                    allowedMaxChannels = minChannels;
+                } else {
+                    allowedMaxChannels = 1;
+                }
             }
 
             if (this.allowedToOpenNewChannel(allowedMaxChannels)) {

@@ -41,6 +41,7 @@ public final class ConnectionPolicy {
     private Duration idleTcpConnectionTimeout;
     private Duration idleTcpEndpointTimeout;
     private int maxConnectionsPerEndpoint;
+    private int minConnectionsPerEndpoint;
     private int maxRequestsPerConnection;
     private Duration tcpNetworkRequestTimeout;
     private boolean tcpConnectionEndpointRediscoveryEnabled;
@@ -73,6 +74,7 @@ public final class ConnectionPolicy {
         this.idleTcpConnectionTimeout = directConnectionConfig.getIdleConnectionTimeout();
         this.idleTcpEndpointTimeout = directConnectionConfig.getIdleEndpointTimeout();
         this.maxConnectionsPerEndpoint = directConnectionConfig.getMaxConnectionsPerEndpoint();
+        this.minConnectionsPerEndpoint = directConnectionConfig.getMinConnectionsPerEndpoint();
         this.maxRequestsPerConnection = directConnectionConfig.getMaxRequestsPerConnection();
         this.tcpNetworkRequestTimeout = directConnectionConfig.getNetworkRequestTimeout();
         this.tcpConnectionEndpointRediscoveryEnabled = directConnectionConfig.isConnectionEndpointRediscoveryEnabled();
@@ -535,6 +537,24 @@ public final class ConnectionPolicy {
      */
     public ConnectionPolicy setMaxConnectionsPerEndpoint(int maxConnectionsPerEndpoint) {
         this.maxConnectionsPerEndpoint = maxConnectionsPerEndpoint;
+        return this;
+    }
+
+    /**
+     * Gets the min channels per endpoint
+     * @return the min channels per endpoint
+     */
+    public int getMinConnectionsPerEndpoint() {
+        return minConnectionsPerEndpoint;
+    }
+
+    /**
+     * Sets the min channels per endpoint
+     * @param minConnectionsPerEndpoint the min channels per endpoint
+     * @return the {@link ConnectionPolicy}
+     */
+    public ConnectionPolicy setMinConnectionsPerEndpoint(int minConnectionsPerEndpoint) {
+        this.minConnectionsPerEndpoint = minConnectionsPerEndpoint;
         return this;
     }
 

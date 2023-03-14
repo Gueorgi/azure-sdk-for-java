@@ -457,6 +457,9 @@ public class RntbdTransportClient extends TransportClient {
         private final int maxChannelsPerEndpoint;
 
         @JsonProperty()
+        private final int minChannelsPerEndpoint;
+
+        @JsonProperty()
         private final int maxRequestsPerChannel;
 
         @JsonProperty()
@@ -582,6 +585,7 @@ public class RntbdTransportClient extends TransportClient {
             this.idleEndpointTimeout = builder.idleEndpointTimeout;
             this.maxBufferCapacity = builder.maxBufferCapacity;
             this.maxChannelsPerEndpoint = builder.maxChannelsPerEndpoint;
+            this.minChannelsPerEndpoint = builder.minChannelsPerEndpoint;
             this.maxRequestsPerChannel = builder.maxRequestsPerChannel;
             this.maxConcurrentRequestsPerEndpointOverride = builder.maxConcurrentRequestsPerEndpointOverride;
             this.receiveHangDetectionTime = builder.receiveHangDetectionTime;
@@ -620,6 +624,7 @@ public class RntbdTransportClient extends TransportClient {
             this.idleEndpointTimeout = connectionPolicy.getIdleTcpEndpointTimeout();
             this.maxBufferCapacity = 8192 << 10;
             this.maxChannelsPerEndpoint = connectionPolicy.getMaxConnectionsPerEndpoint();
+            this.minChannelsPerEndpoint = connectionPolicy.getMinConnectionsPerEndpoint();
             this.maxRequestsPerChannel = connectionPolicy.getMaxRequestsPerConnection();
 
             this.maxConcurrentRequestsPerEndpointOverride = -1;
@@ -683,6 +688,10 @@ public class RntbdTransportClient extends TransportClient {
 
         public int maxChannelsPerEndpoint() {
             return this.maxChannelsPerEndpoint;
+        }
+
+        public int minChannelsPerEndpoint() {
+            return this.minChannelsPerEndpoint;
         }
 
         public int maxRequestsPerChannel() {
@@ -787,12 +796,13 @@ public class RntbdTransportClient extends TransportClient {
         }
 
         public String toDiagnosticsString() {
-            return lenientFormat("(cto:%s, nrto:%s, icto:%s, ieto:%s, mcpe:%s, mrpc:%s, cer:%s)",
+            return lenientFormat("(cto:%s, nrto:%s, icto:%s, ieto:%s, mcpe:%s, mncpe:%s, mrpc:%s, cer:%s)",
                 connectTimeout,
                 tcpNetworkRequestTimeout,
                 idleChannelTimeout,
                 idleEndpointTimeout,
                 maxChannelsPerEndpoint,
+                minChannelsPerEndpoint,
                 maxRequestsPerChannel,
                 connectionEndpointRediscoveryEnabled);
         }
@@ -830,6 +840,7 @@ public class RntbdTransportClient extends TransportClient {
          *   "idleEndpointTimeout": "PT1H",
          *   "maxBufferCapacity": 8388608,
          *   "maxChannelsPerEndpoint": 130,
+         *   "minChannelsPerEndpoint": 0,
          *   "maxRequestsPerChannel": 30,
          *   "maxConcurrentRequestsPerEndpointOverride": -1,
          *   "receiveHangDetectionTime": "PT1M5S",
@@ -927,6 +938,7 @@ public class RntbdTransportClient extends TransportClient {
             private Duration idleEndpointTimeout;
             private int maxBufferCapacity;
             private int maxChannelsPerEndpoint;
+            private int minChannelsPerEndpoint;
             private int maxRequestsPerChannel;
             private int maxConcurrentRequestsPerEndpointOverride;
             private Duration receiveHangDetectionTime;
@@ -966,6 +978,7 @@ public class RntbdTransportClient extends TransportClient {
                 this.idleEndpointTimeout = connectionPolicy.getIdleTcpEndpointTimeout();
                 this.maxBufferCapacity = DEFAULT_OPTIONS.maxBufferCapacity;
                 this.maxChannelsPerEndpoint = connectionPolicy.getMaxConnectionsPerEndpoint();
+                this.minChannelsPerEndpoint = connectionPolicy.getMinConnectionsPerEndpoint();
                 this.maxRequestsPerChannel = connectionPolicy.getMaxRequestsPerConnection();
 
                 this.maxConcurrentRequestsPerEndpointOverride =
@@ -1065,6 +1078,19 @@ public class RntbdTransportClient extends TransportClient {
             public Builder maxChannelsPerEndpoint(final int value) {
                 checkArgument(value > 0, "expected positive value, not %s", value);
                 this.maxChannelsPerEndpoint = value;
+                // if current min value is greater than new max, lower the min to the new max.
+                if (this.minChannelsPerEndpoint > value) {
+                    this.minChannelsPerEndpoint = value;
+                }
+                return this;
+            }
+
+            public Builder minChannelsPerEndpoint(final int value) {
+                checkArgument(value >= 0, "expected positive value, not %s", value);
+                checkArgument(value <= this.maxChannelsPerEndpoint,
+                    "min value %s cannot be higher than the max value %s", value,
+                    this.maxChannelsPerEndpoint);
+                this.minChannelsPerEndpoint = value;
                 return this;
             }
 

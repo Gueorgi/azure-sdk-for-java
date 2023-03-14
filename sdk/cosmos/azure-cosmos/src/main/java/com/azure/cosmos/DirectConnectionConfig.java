@@ -27,6 +27,7 @@ public final class DirectConnectionConfig {
     private static final Duration MIN_NETWORK_REQUEST_TIMEOUT = Duration.ofSeconds(1L);
     private static final Duration MAX_NETWORK_REQUEST_TIMEOUT = Duration.ofSeconds(10L);
     private static final int DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT = 130;
+    private static final int DEFAULT_MIN_CONNECTIONS_PER_ENDPOINT = 0;
     private static final int DEFAULT_MAX_REQUESTS_PER_CONNECTION = 30;
     private static final int DEFAULT_IO_THREAD_COUNT_PER_CORE_FACTOR = 2;
     private static final int DEFAULT_IO_THREAD_PRIORITY = Thread.NORM_PRIORITY;
@@ -37,6 +38,7 @@ public final class DirectConnectionConfig {
     private Duration idleEndpointTimeout;
     private Duration networkRequestTimeout;
     private int maxConnectionsPerEndpoint;
+    private int minConnectionsPerEndpoint;
     private int maxRequestsPerConnection;
     private int ioThreadCountPerCoreFactor;
     private int ioThreadPriority;
@@ -51,6 +53,7 @@ public final class DirectConnectionConfig {
         this.idleConnectionTimeout = Duration.ZERO;
         this.idleEndpointTimeout = DEFAULT_IDLE_ENDPOINT_TIMEOUT;
         this.maxConnectionsPerEndpoint = DEFAULT_MAX_CONNECTIONS_PER_ENDPOINT;
+        this.minConnectionsPerEndpoint = DEFAULT_MIN_CONNECTIONS_PER_ENDPOINT;
         this.maxRequestsPerConnection = DEFAULT_MAX_REQUESTS_PER_CONNECTION;
         this.networkRequestTimeout = DEFAULT_NETWORK_REQUEST_TIMEOUT;
         this.ioThreadCountPerCoreFactor = DEFAULT_IO_THREAD_COUNT_PER_CORE_FACTOR;
@@ -214,7 +217,44 @@ public final class DirectConnectionConfig {
      * @return the {@link DirectConnectionConfig}
      */
     public DirectConnectionConfig setMaxConnectionsPerEndpoint(int maxConnectionsPerEndpoint) {
+        // TODO: should we check for non negative values? Is there a meaning to set max connections to 0 or -1?
         this.maxConnectionsPerEndpoint = maxConnectionsPerEndpoint;
+        // If new max is lower than current minimum, lower the minimum to new value.
+        if (maxConnectionsPerEndpoint < this.minConnectionsPerEndpoint) {
+            this.minConnectionsPerEndpoint = maxConnectionsPerEndpoint;
+        }
+        return this;
+    }
+
+    /**
+     * Gets the min connections per endpoint. This represents the minimum size of connection pool to maintain
+     * all the time for a specific endpoint.
+     *
+     * Default value is 0.
+     *
+     * @return the min connections per endpoint
+     */
+    public int getMinConnectionsPerEndpoint() {
+        return minConnectionsPerEndpoint;
+    }
+
+    /**
+     * Sets the min connections per endpoint. This represents the minimum size of connection pool to maintain for a
+     * specific endpoint. Must be non-negative value. If new minimum is greater than current maximum, will increase the
+     * maximum.
+     *
+     * Default value is 0.
+     *
+     * @param minConnectionsPerEndpoint the max connections per endpoint
+     * @return the {@link DirectConnectionConfig}
+     */
+    public DirectConnectionConfig setMinConnectionsPerEndpoint(int minConnectionsPerEndpoint) {
+        checkArgument(minConnectionsPerEndpoint >= 0,
+            "minimum connection per endpoint cannot be less than 0");
+        this.minConnectionsPerEndpoint = minConnectionsPerEndpoint;
+        if (maxConnectionsPerEndpoint < this.minConnectionsPerEndpoint) {
+            this.maxConnectionsPerEndpoint = minConnectionsPerEndpoint;
+        }
         return this;
     }
 
