@@ -734,7 +734,7 @@ public final class RntbdClientChannelPool implements ChannelPool {
                         // and these will be created one after another - each waiting to open connection - and the
                         // new channels being established will trigger the next pull from the queue of requests. Note
                         // that having more than the min pool size internal channel opening requests is no-op.
-                        for (int i = 1; i < minChannels; i++ ) {
+                        for (int i = 1; i < minChannels; i++) {
                             RntbdRequestRecord opRecord = promise.getRntbdRequestRecord();
                             OpenChannelMinPoolPromise minPoolPromise = new OpenChannelMinPoolPromise(
                                 this.getNewChannelPromise(), this.getNewPromiseExpiryTime(),
@@ -776,6 +776,11 @@ public final class RntbdClientChannelPool implements ChannelPool {
                     return;
                 }
 
+            } else if (promise instanceof OpenChannelMinPoolPromise) {
+                // to be here if the promise is for opening minimum connections, means it already has the number of such
+                // connections required - do nothing more. Such request should never be processed in other ways,
+                // their sole purpose is to obtain channel and release it to the pool - there is no real request inside.
+                return;
             } else if (this.computeLoadFactor() > 0.90D) {
 
                 // All channels are swamped and we'll pick the one with the lowest pending request count
