@@ -746,7 +746,12 @@ public final class RntbdClientChannelPool implements ChannelPool {
                     // Fulfill this request with a new channel, assuming we can connect one
                     // If our connection attempt fails, notifyChannelConnect will call us again
 
-                    final Promise<Channel> anotherPromise = this.newChannelPromiseForToBeEstablishedChannel(promise);
+                    // TODO: do we need to create new OpenChannelMinPoolPromise is the current one is of that type?
+                    //  Will it work if we reuse the OpenChannelMinPoolPromise promise we already have? Or should we
+                    //  create newChannelPromiseForToBeEstablishedChannel? Any issues with event loops etc?
+                    final Promise<Channel> anotherPromise = (promise instanceof OpenChannelMinPoolPromise) ?
+                        new OpenChannelMinPoolPromise(promise, promise.getExpiryTimeInNanos(), promise.getRntbdRequestRecord())
+                        : this.newChannelPromiseForToBeEstablishedChannel(promise);
 
                     RntbdChannelAcquisitionTimeline.startNewEvent(
                         channelAcquisitionTimeline,
