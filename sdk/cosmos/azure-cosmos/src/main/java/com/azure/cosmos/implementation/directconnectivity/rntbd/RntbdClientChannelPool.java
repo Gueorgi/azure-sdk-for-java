@@ -735,6 +735,8 @@ public final class RntbdClientChannelPool implements ChannelPool {
                         // new channels being established will trigger the next pull from the queue of requests. Note
                         // that having more than the min pool size internal channel opening requests is no-op.
                         for (int i = 1; i < minChannels; i++) {
+                            // TODO: do we need to call newMinPoolChannelPromiseForToBeEstablishedChannel(promise)?
+                            //  May be not if one needs different expiry times and brand new promise.
                             OpenChannelMinPoolPromise minPoolPromise = new OpenChannelMinPoolPromise(
                                 this.getNewChannelPromise(), this.getNewPromiseExpiryTime(),
                                 promise.getRntbdRequestRecord());
@@ -746,11 +748,8 @@ public final class RntbdClientChannelPool implements ChannelPool {
                     // Fulfill this request with a new channel, assuming we can connect one
                     // If our connection attempt fails, notifyChannelConnect will call us again
 
-                    // TODO: do we need to create new OpenChannelMinPoolPromise is the current one is of that type?
-                    //  Will it work if we reuse the OpenChannelMinPoolPromise promise we already have? Or should we
-                    //  create newChannelPromiseForToBeEstablishedChannel? Any issues with event loops etc?
                     final Promise<Channel> anotherPromise = (promise instanceof OpenChannelMinPoolPromise) ?
-                        new OpenChannelMinPoolPromise(promise, promise.getExpiryTimeInNanos(), promise.getRntbdRequestRecord())
+                        newMinPoolChannelPromiseForToBeEstablishedChannel(promise)
                         : this.newChannelPromiseForToBeEstablishedChannel(promise);
 
                     RntbdChannelAcquisitionTimeline.startNewEvent(
@@ -1155,6 +1154,26 @@ public final class RntbdClientChannelPool implements ChannelPool {
         anotherPromise.addListener(listener);
 
         return new ChannelPromiseWithExpiryTime(anotherPromise, promise.getExpiryTimeInNanos(), promise.getRntbdRequestRecord());
+    }
+
+    private OpenChannelMinPoolPromise newMinPoolChannelPromiseForToBeEstablishedChannel(
+        final ChannelPromiseWithExpiryTime promise) {
+
+        return this.createNewMinNewChannelPromise(promise, this.executor);
+    }
+
+    private OpenChannelMinPoolPromise createNewMinNewChannelPromise(
+        final ChannelPromiseWithExpiryTime promise, final EventExecutor eventLoop) {
+
+        checkNotNull(promise, "expected non-null promise");
+
+        final AcquireListener listener = new AcquireListener(this, promise);
+        final Promise<Channel> anotherPromise = eventLoop.newPromise();
+
+        listener.acquired();
+        anotherPromise.addListener(listener);
+
+        return new OpenChannelMinPoolPromise(anotherPromise, promise.getExpiryTimeInNanos(), promise.getRntbdRequestRecord());
     }
 
     private void newTimeout(
