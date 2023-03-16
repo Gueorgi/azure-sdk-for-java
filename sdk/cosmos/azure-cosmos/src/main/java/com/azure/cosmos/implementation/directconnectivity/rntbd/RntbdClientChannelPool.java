@@ -735,7 +735,6 @@ public final class RntbdClientChannelPool implements ChannelPool {
                         // new channels being established will trigger the next pull from the queue of requests. Note
                         // that having more than the min pool size internal channel opening requests is no-op.
                         for (int i = 1; i < minChannels; i++) {
-                            RntbdRequestRecord opRecord = promise.getRntbdRequestRecord();
                             OpenChannelMinPoolPromise minPoolPromise = new OpenChannelMinPoolPromise(
                                 this.getNewChannelPromise(), this.getNewPromiseExpiryTime(),
                                 promise.getRntbdRequestRecord());
@@ -765,7 +764,7 @@ public final class RntbdClientChannelPool implements ChannelPool {
                         }
                     }
 
-                    ChannelFuture future = this.bootstrap.clone().attr(POOL_KEY, this).connect();
+                    final ChannelFuture future = this.bootstrap.clone().attr(POOL_KEY, this).connect();
 
                     if (future.isDone()) {
                         this.safeNotifyChannelConnect(future, anotherPromise);
