@@ -119,6 +119,14 @@ import static com.azure.cosmos.implementation.guava27.Strings.lenientFormat;
 @JsonSerialize(using = RntbdClientChannelPool.JsonSerializer.class)
 public final class RntbdClientChannelPool implements ChannelPool {
 
+    // Utility inner promise to use for fulfilling minimum pool size on opening first connection.
+    class OpenChannelMinPoolPromise extends ChannelPromiseWithExpiryTime {
+        public OpenChannelMinPoolPromise(Promise<Channel> channelPromise, long expiryTimeInNanos,
+                                         RntbdRequestRecord requestRecord) {
+            super(channelPromise, expiryTimeInNanos, requestRecord);
+        }
+    }
+
     // TODO: moderakh setup proper retry in higher stack for the exceptions here
     private static final TimeoutException ACQUISITION_TIMEOUT = ThrowableUtil.unknownStackTrace(
         new TimeoutException("acquisition took longer than the configured maximum time"),
@@ -683,7 +691,17 @@ public final class RntbdClientChannelPool implements ChannelPool {
         }
 
         try {
-            Channel candidate = this.pollChannel(channelAcquisitionTimeline);
+            // if opening connections to fulfill min pool size, do not use an existing channels - go for opening
+            // a new channel if still not reached that min size. If size reached - drop the request.
+            Channel candidate = null;
+            if (promise instanceof OpenChannelMinPoolPromise) {
+                // min pool size number of channels already created or being created - do nothing, ignore the request.
+                if (this.channels(true) >= this.minChannels) {
+                    return;
+                }
+            } else {
+                candidate = this.pollChannel(channelAcquisitionTimeline);
+            }
 
             if (candidate != null) {
 
@@ -695,18 +713,36 @@ public final class RntbdClientChannelPool implements ChannelPool {
             }
 
             // ONLY allow maximum 1 channel to be opened by open channel request
+            // FOR requests to open up to the min pool number of channels, use the min pool size limit.
             int allowedMaxChannels = this.maxChannels;
             if (promise instanceof OpenChannelPromise) {
-                // if there is to be min connections in the pool, allow opening all of these.
-                if (minChannels > 1) {
-                    allowedMaxChannels = minChannels;
-                } else {
-                    allowedMaxChannels = 1;
-                }
+                allowedMaxChannels = 1;
+            } else if (promise instanceof OpenChannelMinPoolPromise) {
+                allowedMaxChannels = minChannels;
             }
 
             if (this.allowedToOpenNewChannel(allowedMaxChannels)) {
                 if (this.connecting.compareAndSet(false, true)) {
+
+                    // 1st attempt to (re)open new channel and there is min pool size limit > 1, and it is not yet
+                    // reached? Then create additional request for more channels. These requests will be ignored if
+                    // min size is reached. We do this only if it is the very first request to open channel.
+                    if (promise instanceof OpenChannelPromise && this.channels(true) == 1
+                        && minChannels > 1) {
+                        // Go and schedule min size -1 (for the current connection being opened) additional internal
+                        // requests to create more channels. By scheduling these we will not burden the current thread
+                        // and these will be created one after another - each waiting to open connection - and the
+                        // new channels being established will trigger the next pull from the queue of requests. Note
+                        // that having more than the min pool size internal channel opening requests is no-op.
+                        for (int i = 1; i < minChannels; i++ ) {
+                            RntbdRequestRecord opRecord = promise.getRntbdRequestRecord();
+                            OpenChannelMinPoolPromise minPoolPromise = new OpenChannelMinPoolPromise(
+                                this.getNewChannelPromise(), this.getNewPromiseExpiryTime(),
+                                promise.getRntbdRequestRecord());
+
+                            this.addTaskToPendingAcquisitionQueue(minPoolPromise);
+                        }
+                    }
 
                     // Fulfill this request with a new channel, assuming we can connect one
                     // If our connection attempt fails, notifyChannelConnect will call us again
@@ -729,7 +765,7 @@ public final class RntbdClientChannelPool implements ChannelPool {
                         }
                     }
 
-                    final ChannelFuture future = this.bootstrap.clone().attr(POOL_KEY, this).connect();
+                    ChannelFuture future = this.bootstrap.clone().attr(POOL_KEY, this).connect();
 
                     if (future.isDone()) {
                         this.safeNotifyChannelConnect(future, anotherPromise);
@@ -1229,6 +1265,12 @@ public final class RntbdClientChannelPool implements ChannelPool {
 
                         return channel;
                     });
+
+                    // If this was the special internal promise to open min size pool connections, release the channel to the
+                    // pool - there is no real request on it anyway nor anyone listening on the promise/channel future.
+                    if (promise instanceof OpenChannelMinPoolPromise) {
+                        this.release(channel);
+                    }
                 } else {
                     if (logger.isDebugEnabled()) {
                         logger.debug("notifyChannelConnect promise.trySuccess(channel)=false");
@@ -1252,6 +1294,7 @@ public final class RntbdClientChannelPool implements ChannelPool {
                     clientTelemetry
                 );
             }
+
             this.connecting.set(false);
         }
     }
